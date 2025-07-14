@@ -27,6 +27,7 @@ import com.diettrackr.app.data.models.MealStatus
 import com.diettrackr.app.ui.components.GlassCard
 import com.diettrackr.app.ui.components.MacrosProgressBar
 import com.diettrackr.app.ui.components.MealCard
+import com.diettrackr.app.ui.components.ManualEntryData
 import com.diettrackr.app.ui.components.ModernCard
 import com.diettrackr.app.ui.theme.*
 import kotlinx.coroutines.flow.collectLatest
@@ -97,10 +98,11 @@ fun HomeScreen(navController: NavController) {
             
             logs.filter { it.status == MealStatus.COMPLETED || it.status == MealStatus.MODIFIED }.forEach { log ->
                 val meal = meals.find { it.id == log.mealId } ?: return@forEach
-                totalProtein += meal.protein
-                totalCarbs += meal.carbs
-                totalFats += meal.fats
-                totalCalories += meal.calories
+                // Use manual values if available, otherwise use meal defaults
+                totalProtein += log.manualProtein ?: meal.protein
+                totalCarbs += log.manualCarbs ?: meal.carbs
+                totalFats += log.manualFats ?: meal.fats
+                totalCalories += log.manualCalories ?: meal.calories
             }
         }
     }
@@ -118,6 +120,38 @@ fun HomeScreen(navController: NavController) {
                     mealId = meal.id,
                     date = today,
                     status = status
+                )
+                database.dailyLogDao().insertDailyLog(newLog)
+            }
+        }
+    }
+    
+    // Update meal with manual entry
+    val updateMealWithManualEntry = { meal: Meal, entryData: ManualEntryData ->
+        scope.launch {
+            val existingLog = dailyLogs.find { it.mealId == meal.id }
+            val hasAnyManualValue = entryData.calories != null || entryData.protein != null || 
+                                  entryData.carbs != null || entryData.fats != null
+            
+            if (existingLog != null) {
+                val updatedLog = existingLog.copy(
+                    manualCalories = entryData.calories,
+                    manualProtein = entryData.protein,
+                    manualCarbs = entryData.carbs,
+                    manualFats = entryData.fats,
+                    hasManualEntry = hasAnyManualValue
+                )
+                database.dailyLogDao().updateDailyLog(updatedLog)
+            } else {
+                val newLog = DailyLog(
+                    mealId = meal.id,
+                    date = today,
+                    status = MealStatus.PENDING,
+                    manualCalories = entryData.calories,
+                    manualProtein = entryData.protein,
+                    manualCarbs = entryData.carbs,
+                    manualFats = entryData.fats,
+                    hasManualEntry = hasAnyManualValue
                 )
                 database.dailyLogDao().insertDailyLog(newLog)
             }
@@ -262,7 +296,8 @@ fun HomeScreen(navController: NavController) {
                     }
                 } else {
                     items(meals) { meal ->
-                        val mealStatus = dailyLogs.find { it.mealId == meal.id }?.status ?: MealStatus.PENDING
+                        val dailyLog = dailyLogs.find { it.mealId == meal.id }
+                        val mealStatus = dailyLog?.status ?: MealStatus.PENDING
                         val components = mealComponents[meal.id] ?: emptyList()
                         val isExpanded = expandedMealId == meal.id
                         
@@ -270,11 +305,18 @@ fun HomeScreen(navController: NavController) {
                             meal = meal,
                             components = components,
                             status = mealStatus,
+                            dailyLog = dailyLog,
                             onStatusChange = { newStatus ->
                                 updateMealStatus(meal, newStatus)
                             },
                             onEditClick = {
                                 navController.navigate("edit_meal/${meal.id}")
+                            },
+                            onManualEntry = { entryData ->
+                                updateMealWithManualEntry(meal, entryData)
+                            },
+                            onFoodRecognition = {
+                                navController.navigate("food_recognition")
                             },
                             expanded = isExpanded,
                             onExpandChange = { expand ->

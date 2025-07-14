@@ -1,9 +1,14 @@
 package com.diettrackr.app.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +32,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.diettrackr.app.ui.screens.*
+import com.diettrackr.app.ui.screens.FoodRecognitionScreen
 import com.diettrackr.app.ui.theme.DietTrackrTheme
 import com.diettrackr.app.ui.theme.*
 
@@ -35,11 +41,24 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "MainActivity"
     }
 
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            Log.d(TAG, "Notification permission granted")
+        } else {
+            Log.w(TAG, "Notification permission denied")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         // Add simple logging
         Log.d(TAG, "onCreate called")
+        
+        // Request notification permission for Android 13+
+        requestNotificationPermission()
         
         setContent {
             Log.d(TAG, "setContent called")
@@ -47,6 +66,25 @@ class MainActivity : ComponentActivity() {
                 Log.d(TAG, "DietTrackrTheme applied")
                 DietTrackrApp()
             }
+        }
+    }
+    
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            when {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    Log.d(TAG, "Notification permission already granted")
+                }
+                else -> {
+                    Log.d(TAG, "Requesting notification permission")
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        } else {
+            Log.d(TAG, "Notification permission not required for this Android version")
         }
     }
 }
@@ -60,6 +98,7 @@ fun DietTrackrApp() {
     
     val items = listOf(
         Screen.Home,
+        Screen.Calendar,
         Screen.MealPlan,
         Screen.Progress,
         Screen.Settings
@@ -148,6 +187,9 @@ fun DietTrackrApp() {
                 composable(Screen.Home.route) { 
                     HomeScreen(navController = navController) 
                 }
+                composable(Screen.Calendar.route) { 
+                    CalendarScreen(navController = navController) 
+                }
                 composable(Screen.MealPlan.route) { 
                     MealPlanScreen(navController = navController) 
                 }
@@ -166,6 +208,17 @@ fun DietTrackrApp() {
                         mealId = mealId
                     )
                 }
+                
+                composable("food_recognition") {
+                    FoodRecognitionScreen(
+                        navController = navController,
+                        onFoodRecognized = { entryData ->
+                            // This will be handled by the calling screen
+                            // For now, we'll navigate back
+                            navController.navigateUp()
+                        }
+                    )
+                }
             }
         }
     }
@@ -173,6 +226,7 @@ fun DietTrackrApp() {
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     object Home : Screen("home", "Home", Icons.Default.Home)
+    object Calendar : Screen("calendar", "Calendar", Icons.Default.CalendarMonth)
     object MealPlan : Screen("meal_plan", "Meal Plan", Icons.Default.Restaurant)
     object Progress : Screen("progress", "Progress", Icons.Default.BarChart)
     object Settings : Screen("settings", "Settings", Icons.Default.Settings)

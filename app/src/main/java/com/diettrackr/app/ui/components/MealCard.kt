@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.diettrackr.app.data.models.Meal
 import com.diettrackr.app.data.models.MealComponent
 import com.diettrackr.app.data.models.MealStatus
+import com.diettrackr.app.data.models.DailyLog
 import com.diettrackr.app.ui.theme.*
 import java.time.format.DateTimeFormatter
 
@@ -29,8 +30,11 @@ fun MealCard(
     meal: Meal,
     components: List<MealComponent>,
     status: MealStatus = MealStatus.PENDING,
+    dailyLog: DailyLog? = null,
     onStatusChange: (MealStatus) -> Unit = {},
     onEditClick: () -> Unit = {},
+    onManualEntry: (ManualEntryData) -> Unit = {},
+    onFoodRecognition: () -> Unit = {},
     expanded: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
@@ -43,6 +47,14 @@ fun MealCard(
             MealStatus.PENDING -> PendingColor
         }
     )
+    
+    var showManualEntryDialog by remember { mutableStateOf(false) }
+    
+    // Use manual values if available, otherwise use meal defaults
+    val displayCalories = dailyLog?.manualCalories ?: meal.calories
+    val displayProtein = dailyLog?.manualProtein ?: meal.protein
+    val displayCarbs = dailyLog?.manualCarbs ?: meal.carbs
+    val displayFats = dailyLog?.manualFats ?: meal.fats
     
     // Simple glass card without colors
     ModernCard(
@@ -81,13 +93,35 @@ fun MealCard(
             
             // Macro summary with modern progress bars
             MacrosProgressBar(
-                protein = meal.protein,
-                carbs = meal.carbs,
-                fats = meal.fats,
-                targetProtein = meal.protein,
-                targetCarbs = meal.carbs,
-                targetFats = meal.fats
+                protein = displayProtein,
+                carbs = displayCarbs,
+                fats = displayFats,
+                targetProtein = displayProtein,
+                targetCarbs = displayCarbs,
+                targetFats = displayFats
             )
+            
+            // Manual entry indicator
+            if (dailyLog?.hasManualEntry == true) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Manual entry",
+                        tint = CardOrange,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Custom values entered",
+                        fontSize = 12.sp,
+                        color = CardOrange,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
             
             Spacer(modifier = Modifier.height(16.dp))
             
@@ -98,7 +132,7 @@ fun MealCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Total: ${meal.calories} calories",
+                    text = "Total: ${displayCalories} calories",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -142,6 +176,32 @@ fun MealCard(
                     
                     Spacer(modifier = Modifier.height(16.dp))
                 }
+                
+                // Manual Entry and Food Recognition buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ModernActionButton(
+                        text = "Manual Entry",
+                        icon = Icons.Default.Edit,
+                        color = CardOrange,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        showManualEntryDialog = true
+                    }
+                    
+                    ModernActionButton(
+                        text = "Food Recognition",
+                        icon = Icons.Default.CameraAlt,
+                        color = CardBlue,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        onFoodRecognition()
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
                 
                 // Action buttons with modern styling
                 Row(
@@ -201,6 +261,24 @@ fun MealCard(
                 }
             }
         }
+    }
+    
+    // Manual Entry Dialog
+    if (showManualEntryDialog) {
+        ManualEntryDialog(
+            meal = meal,
+            initialData = ManualEntryData(
+                calories = dailyLog?.manualCalories,
+                protein = dailyLog?.manualProtein,
+                carbs = dailyLog?.manualCarbs,
+                fats = dailyLog?.manualFats
+            ),
+            onDismiss = { showManualEntryDialog = false },
+            onSave = { entryData ->
+                onManualEntry(entryData)
+                showManualEntryDialog = false
+            }
+        )
     }
 }
 

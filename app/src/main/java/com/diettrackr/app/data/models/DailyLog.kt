@@ -24,7 +24,14 @@ data class DailyLog(
     val mealId: Int,
     val date: LocalDate = LocalDate.now(),
     val status: MealStatus = MealStatus.PENDING,
-    val notes: String = ""
+    val notes: String = "",
+    // Manual override fields for calories and macros
+    val manualCalories: Int? = null,
+    val manualProtein: Int? = null,
+    val manualCarbs: Int? = null,
+    val manualFats: Int? = null,
+    // Track if user manually entered values
+    val hasManualEntry: Boolean = false
 )
 
 enum class MealStatus {
